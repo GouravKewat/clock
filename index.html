@@ -1,230 +1,318 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Smartwatch Task Manager</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Digital Smart Watch with Task Manager</title>
 
-<style>
-/* =========================
-   WATCH-OPTIMIZED UI STYLE
-   ========================= */
-body {
-  margin: 0;
-  font-family: system-ui, sans-serif;
-  background: #000;
-  color: #fff;
-}
-
-header {
-  text-align: center;
-  padding: 10px;
-  font-weight: bold;
-  border-bottom: 1px solid #222;
-}
-
-button {
-  background: #1e88e5;
-  color: white;
-  border: none;
-  padding: 10px;
-  border-radius: 8px;
-  width: 100%;
-  font-size: 14px;
-}
-
-button:active {
-  background: #1565c0;
-}
-
-.container {
-  padding: 10px;
-}
-
-.task {
-  padding: 10px;
-  margin-bottom: 8px;
-  border-radius: 10px;
-  background: #111;
-}
-
-.task.high { border-left: 4px solid #e53935; }
-.task.medium { border-left: 4px solid #fbc02d; }
-.task.low { border-left: 4px solid #43a047; }
-
-.task.completed {
-  opacity: 0.4;
-  text-decoration: line-through;
-}
-
-input, select {
-  width: 100%;
-  margin-bottom: 8px;
-  padding: 8px;
-  border-radius: 6px;
-  border: none;
-}
-
-.hidden {
-  display: none;
-}
-</style>
-</head>
-
-<body>
-
-<header>Task Manager</header>
-
-<div class="container" id="taskListView">
-  <button onclick="UI.showEditor()">+ New Task</button>
-  <div id="taskList"></div>
-</div>
-
-<div class="container hidden" id="editorView">
-  <input id="title" placeholder="Task title" />
-  <input id="desc" placeholder="Description" />
-  
-  <select id="priority">
-    <option value="low">Low</option>
-    <option value="medium">Medium</option>
-    <option value="high">High</option>
-  </select>
-
-  <input type="date" id="dueDate" />
-
-  <button onclick="TaskService.save()">Save Task</button>
-  <button onclick="UI.showList()">Cancel</button>
-</div>
-
-<script>
-/* =========================
-   MODEL CONFIGURATION
-   ========================= */
-const ModelConfig = {
-  BASIC: {
-    maxTasks: 20,
-    reminders: false
-  },
-  MID: {
-    maxTasks: 100,
-    reminders: true
-  },
-  PREMIUM: {
-    maxTasks: 500,
-    reminders: true
-  }
-};
-
-// Change model here
-const DEVICE_MODEL = ModelConfig.MID;
-
-/* =========================
-   EVENT BUS (CORE)
-   ========================= */
-const EventBus = {
-  events: {},
-  on(event, handler) {
-    (this.events[event] ||= []).push(handler);
-  },
-  emit(event, data) {
-    (this.events[event] || []).forEach(h => h(data));
-  }
-};
-
-/* =========================
-   STORAGE (OFFLINE-FIRST)
-   ========================= */
-const Storage = {
-  key: "watch_tasks",
-  load() {
-    return JSON.parse(localStorage.getItem(this.key) || "[]");
-  },
-  save(tasks) {
-    localStorage.setItem(this.key, JSON.stringify(tasks));
-  }
-};
-
-/* =========================
-   TASK SERVICE (LOGIC)
-   ========================= */
-const TaskService = {
-  tasks: Storage.load(),
-
-  save() {
-    if (this.tasks.length >= DEVICE_MODEL.maxTasks) {
-      alert("Task limit reached");
-      return;
+  <!-- Embedded CSS -->
+  <style>
+    /* Reset and Base Styling */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
-    const task = {
-      id: crypto.randomUUID(),
-      title: title.value,
-      description: desc.value,
-      priority: priority.value,
-      dueDate: dueDate.value,
-      status: "pending",
-      createdAt: Date.now()
-    };
+    body {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: radial-gradient(circle at top, #0f2027, #203a43, #2c5364);
+      color: #e5f2ff;
+    }
 
-    this.tasks.push(task);
-    Storage.save(this.tasks);
-    EventBus.emit("taskUpdated");
-    UI.showList();
-  },
+    /* Smartwatch Container */
+    .watch {
+      width: 340px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border-radius: 30px;
+      padding: 22px;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      transition: transform 0.4s ease, box-shadow 0.4s ease;
+    }
 
-  toggle(id) {
-    const task = this.tasks.find(t => t.id === id);
-    task.status = task.status === "pending" ? "completed" : "pending";
-    Storage.save(this.tasks);
-    EventBus.emit("taskUpdated");
-  },
+    .watch:hover {
+      transform: translateY(-6px) scale(1.02);
+      box-shadow: 0 35px 70px rgba(0, 0, 0, 0.8);
+    }
 
-  remove(id) {
-    this.tasks = this.tasks.filter(t => t.id !== id);
-    Storage.save(this.tasks);
-    EventBus.emit("taskUpdated");
-  }
-};
+    /* Time Section */
+    .time {
+      text-align: center;
+      margin-bottom: 20px;
+      transition: transform 0.3s ease;
+    }
 
-/* =========================
-   UI CONTROLLER
-   ========================= */
-const UI = {
-  showEditor() {
-    taskListView.classList.add("hidden");
-    editorView.classList.remove("hidden");
-  },
+    .watch:hover .time {
+      transform: scale(1.05);
+    }
 
-  showList() {
-    editorView.classList.add("hidden");
-    taskListView.classList.remove("hidden");
-    this.render();
-  },
+    .clock {
+      font-size: 38px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      color: #7dd3fc;
+      text-shadow: 0 0 10px rgba(125, 211, 252, 0.6);
+    }
 
-  render() {
-    const list = document.getElementById("taskList");
-    list.innerHTML = "";
+    .date {
+      margin-top: 6px;
+      font-size: 14px;
+      opacity: 0.9;
+      color: #cbd5e1;
+    }
 
-    TaskService.tasks.forEach(task => {
-      const div = document.createElement("div");
-      div.className = `task ${task.priority} ${task.status}`;
-      div.innerHTML = `
-        <strong>${task.title}</strong><br>
-        <small>${task.description}</small><br>
-        <button onclick="TaskService.toggle('${task.id}')">✔</button>
-        <button onclick="TaskService.remove('${task.id}')">✖</button>
-      `;
-      list.appendChild(div);
+    /* Task Manager */
+    .task-section {
+      margin-top: 15px;
+    }
+
+    .task-input {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .task-input input {
+      flex: 1;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: none;
+      outline: none;
+      font-size: 14px;
+      transition: box-shadow 0.3s ease;
+    }
+
+    .task-input input:focus {
+      box-shadow: 0 0 0 2px #22c55e;
+    }
+
+    .task-input button {
+      padding: 8px 12px;
+      border: none;
+      border-radius: 8px;
+      background: #22c55e;
+      color: #ffffff;
+      cursor: pointer;
+      font-size: 14px;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    .task-input button:hover {
+      background: #16a34a;
+      transform: scale(1.08);
+    }
+
+    /* Task List */
+    .task-list {
+      list-style: none;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .task {
+      background: #1e293b;
+      padding: 10px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      transition: transform 0.25s ease, background 0.25s ease;
+    }
+
+    .task:hover {
+      background: #334155;
+      transform: translateX(4px);
+    }
+
+    .task.completed span {
+      text-decoration: line-through;
+      opacity: 0.6;
+    }
+
+    .task span {
+      flex: 1;
+      font-size: 14px;
+      cursor: pointer;
+      transition: color 0.2s ease;
+    }
+
+    .task span:hover {
+      color: #22c55e;
+    }
+
+    .task-buttons button {
+      margin-left: 6px;
+      border: none;
+      background: transparent;
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 14px;
+      transition: transform 0.2s ease, color 0.2s ease;
+    }
+
+    .task-buttons button:hover {
+      color: #ffffff;
+      transform: scale(1.2);
+    }
+
+    /* Scrollbar Styling */
+    .task-list::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .task-list::-webkit-scrollbar-thumb {
+      background: #475569;
+      border-radius: 10px;
+    }
+
+    /* Responsive */
+    @media (max-width: 400px) {
+      .watch {
+        width: 90%;
+      }
+    }
+      
+    /* Floating Bubble Effect */
+    .bubble {
+      position: absolute;
+      bottom: -60px;
+      background: rgba(125, 211, 252, 0.35);
+      border-radius: 50%;
+      pointer-events: none;
+      animation: floatUp linear forwards;
+      box-shadow: 0 0 15px rgba(125, 211, 252, 0.6);
+    }
+
+    @keyframes floatUp {
+      from {
+        transform: translateY(0) scale(0.6);
+        opacity: 0.9;
+      }
+      to {
+        transform: translateY(-120vh) scale(1.1);
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Bubble Container -->
+  <div id="bubbleContainer"></div>
+
+  <div class="watch">
+    <!-- Time Display -->
+    <div class="time">
+      <div class="clock" id="clock">00:00:00 AM</div>
+      <div class="date" id="date">Day, Date</div>
+    </div>
+
+    </div>
+
+  <!-- Embedded JavaScript -->
+  <script>
+    /* Digital Clock Function */
+    function updateTime() {
+      const now = new Date();
+      let hours = now.getHours();
+      const minutes = now.getMinutes();
+      const seconds = now.getSeconds();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+
+      hours = hours % 12 || 12;
+
+      const formattedTime = `${pad(hours)}:${pad(minutes)}:${pad(seconds)} ${ampm}`;
+      document.getElementById('clock').textContent = formattedTime;
+
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+      const formattedDate = `${days[now.getDay()]}, ${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+      document.getElementById('date').textContent = formattedDate;
+    }
+
+    function pad(value) {
+      return value.toString().padStart(2, '0');
+    }
+
+    setInterval(updateTime, 1000);
+
+    /* Bubble Effect Logic */
+    const bubbleContainer = document.getElementById('bubbleContainer');
+
+    function createBubble() {
+      const bubble = document.createElement('span');
+      bubble.className = 'bubble';
+
+      const size = Math.random() * 20 + 10;
+      bubble.style.width = size + 'px';
+      bubble.style.height = size + 'px';
+      bubble.style.left = Math.random() * 100 + 'vw';
+      bubble.style.animationDuration = Math.random() * 6 + 4 + 's';
+
+      bubbleContainer.appendChild(bubble);
+
+      setTimeout(() => {
+        bubble.remove();
+      }, 10000);
+    }
+
+    setInterval(createBubble, 600);
+    updateTime();
+
+    /* Task Management */
+    const taskInput = document.getElementById('taskInput');
+    const taskList = document.getElementById('taskList');
+
+    function addTask() {
+      const taskText = taskInput.value.trim();
+      if (taskText === '') return;
+
+      const li = document.createElement('li');
+      li.className = 'task';
+
+      const span = document.createElement('span');
+      span.textContent = taskText;
+      span.onclick = () => li.classList.toggle('completed');
+
+      const buttons = document.createElement('div');
+      buttons.className = 'task-buttons';
+
+      const editBtn = document.createElement('button');
+      editBtn.textContent = '✏️';
+      editBtn.onclick = () => editTask(span);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = '🗑️';
+      deleteBtn.onclick = () => li.remove();
+
+      buttons.appendChild(editBtn);
+      buttons.appendChild(deleteBtn);
+
+      li.appendChild(span);
+      li.appendChild(buttons);
+      taskList.appendChild(li);
+
+      taskInput.value = '';
+    }
+
+    function editTask(span) {
+      const newText = prompt('Edit task', span.textContent);
+      if (newText !== null && newText.trim() !== '') {
+        span.textContent = newText.trim();
+      }
+    }
+
+    taskInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') addTask();
     });
-  }
-};
-
-/* =========================
-   SYSTEM INIT
-   ========================= */
-EventBus.on("taskUpdated", () => UI.render());
-UI.render();
-</script>
-
+  </script>
 </body>
 </html>
